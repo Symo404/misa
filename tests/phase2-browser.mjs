@@ -4,7 +4,7 @@ import { readFile,mkdir } from 'node:fs/promises';
 import sharp from 'sharp';
 const base='http://localhost:8788';
 const vars=await readFile('.dev.vars','utf8'),token=vars.match(/^LOCAL_ADMIN_TOKEN="([^"]+)"/m)?.[1];assert.ok(token,'Run npm run setup:local first');
-const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+const browser=await chromium.launch({...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),headless:true,args:['--no-sandbox']});
 const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
 await mkdir('artifacts',{recursive:true});
 for(const width of [375,390,768,1024,1440,1920]){
