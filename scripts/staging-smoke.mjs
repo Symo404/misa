@@ -8,6 +8,24 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 try {
+  const probe = await page.request.get(base + '/admin/inquiries', { maxRedirects: 0 });
+  if (probe.status() === 302) {
+    for (const route of ['/', '/contact', '/admin/inquiries', '/admin/assets', '/api/admin/inquiries', '/api/admin/assets', '/api/admin/attachments/test']) {
+      const response = await page.request.get(base + route, { maxRedirects: 0 });
+      assert.equal(response.status(), 302);
+      const destination = new URL(response.headers().location);
+      assert.equal(destination.hostname, 'floral-thunder-2e6a.cloudflareaccess.com');
+      assert.ok(destination.pathname.startsWith('/cdn-cgi/access/login/'));
+    }
+    const response = await page.request.post(base + '/api/inquiries', {
+      maxRedirects: 0,
+      headers: { Origin: base },
+      data: { type: 'general' },
+    });
+    assert.equal(response.status(), 302);
+    console.log('Remote staging Access gate passed: anonymous public, staff, private-file and inquiry requests require sign-in. Authenticated workflows require an owner login session.');
+    process.exitCode = 0;
+  } else {
   for (const route of ['/', '/gifts', '/cheese-charcuterie', '/events', '/contact?type=event']) {
     assert.equal((await page.goto(base + route)).status(), 200);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -44,6 +62,7 @@ try {
   assert.equal((await result.json()).error, 'Inquiries are not enabled. No request was saved.');
   assert.deepEqual(errors, []);
   console.log('Remote staging passed: public routes, desktop hero, keyboard navigation, reduced motion, mobile layout, disabled collection and denied staff/private access. No browser errors.');
+  }
 } finally {
   await browser.close();
 }

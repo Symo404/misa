@@ -7,7 +7,7 @@
   "preview_urls": false,
   "vars": {
     "ENVIRONMENT": "staging",
-    "INQUIRIES_ENABLED": "false",
+    "INQUIRIES_ENABLED": "true",
     "EMAIL_PROVIDER": "disabled"
   },
   "d1_databases": [
