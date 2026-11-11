@@ -1,0 +1,16 @@
+{
+  "name": "misa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "tsc --noEmit",
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wrangler": "^4.0.0",
+    "@playwright/test": "^1.56.1"
+  }
+}
