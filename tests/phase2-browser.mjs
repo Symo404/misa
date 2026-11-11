@@ -1,0 +1,36 @@
+import { chromium } from '@playwright/test';
+import assert from 'node:assert/strict';
+import { readFile,mkdir } from 'node:fs/promises';
+import sharp from 'sharp';
+const base='http://localhost:8788';
+const vars=await readFile('.dev.vars','utf8'),token=vars.match(/^LOCAL_ADMIN_TOKEN="([^"]+)"/m)?.[1];assert.ok(token,'Run npm run setup:local first');
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await mkdir('artifacts',{recursive:true});
+for(const width of [375,390,768,1024,1440,1920]){
+ await page.setViewportSize({width,height:900});
+ for(const route of ['/','/gifts','/cheese-charcuterie','/events','/contact?type=event','/gifts/leather-craft','/admin/inquiries','/admin/assets']){
+  const r=await page.goto(base+route);assert.equal(r.status(),200);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Overflow: '+width+' '+route);
+  if([390,1440].includes(width))await page.screenshot({path:'artifacts/'+(route==='/'?'home':route.slice(1).replaceAll('/','-').replaceAll('?','-'))+'-'+width+'.png',fullPage:true});
+ }
+}
+await page.setViewportSize({width:1440,height:900});await page.goto(base+'/');
+const panels=page.locator('.panel');const equalWidths=await panels.evaluateAll(els=>els.map(e=>e.getBoundingClientRect().width));assert.ok(Math.max(...equalWidths)-Math.min(...equalWidths)<2);
+await panels.nth(0).hover();await page.waitForTimeout(650);let widths=await panels.evaluateAll(els=>els.map(e=>e.getBoundingClientRect().width));assert.ok(Math.abs(widths[0]/1440-.48)<.015);assert.ok(Math.abs(widths[1]/1440-.26)<.015);
+await page.mouse.move(10,10);await page.keyboard.press('Tab');await panels.nth(1).focus();await page.waitForTimeout(650);widths=await panels.evaluateAll(els=>els.map(e=>e.getBoundingClientRect().width));assert.ok(widths[1]>widths[0]*1.7);await page.keyboard.press('Enter');await page.waitForURL('**/cheese-charcuterie');
+await page.emulateMedia({reducedMotion:'reduce'});await page.goto(base+'/');assert.equal(await panels.nth(0).locator('img').evaluate(e=>getComputedStyle(e).transform),'none');assert.equal(await panels.nth(0).evaluate(e=>getComputedStyle(e).transitionDuration),'0s');await page.emulateMedia({reducedMotion:'no-preference'});
+await page.goto(base+'/gifts');await page.getByRole('button',{name:'Leather Craft',exact:true}).click();assert.equal(await page.locator('.card:visible').count(),1);await page.locator('.card:visible a').click();await page.getByRole('link',{name:'Request This Item'}).click();assert.equal(await page.locator('[name=selected]').inputValue(),'Leather Craft');assert.equal(await page.locator('[name=productReference]').inputValue(),'MISA-01-06');
+await page.getByRole('button',{name:'Send inquiry'}).click();assert.equal(await page.locator('form').evaluate(f=>f.checkValidity()),false);
+await page.locator('[name=name]').fill('Browser Test');await page.locator('[name=email]').fill('browser@example.com');await page.locator('[name=quantity]').fill('10');await page.locator('[name=consent]').check();await page.getByRole('button',{name:'Send inquiry'}).click();await page.getByRole('status').filter({hasText:'Your request has been saved'}).waitFor();const confirmation=await page.getByRole('status').textContent();assert.ok(confirmation.includes('Email notifications are disabled'));assert.ok(confirmation.includes('MISA-'));const reference=confirmation.match(/MISA-[a-f0-9-]{36}/)[0];assert.equal(await page.getByRole('button',{name:'Request saved'}).isDisabled(),true);
+await page.goto(base+'/admin/inquiries');await page.getByText('Local staging sign-in',{exact:true}).click();await page.locator('[name=token]').fill(token);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Review request'}).first().waitFor();await page.locator('[name=reference]').fill(reference);await page.getByRole('button',{name:'Search',exact:true}).click();await page.getByRole('button',{name:'Review request'}).click();await page.locator('#record-detail h2').filter({hasText:reference}).waitFor();await page.locator('#record-detail [name=status]').selectOption('Reviewing');await page.locator('#record-detail [name=note]').fill('Browser verified note');await page.getByRole('button',{name:'Save status and note'}).click();await page.waitForTimeout(250);
+await page.screenshot({path:'artifacts/admin-inquiries-authenticated-1440.png',fullPage:true});
+await page.goto(base+'/admin/assets');
+const png=await sharp({create:{width:1400,height:1600,channels:3,background:'#c4a7a4'}}).png().toBuffer();await page.locator('[name=original]').setInputFiles({name:'isolated-fixture.png',mimeType:'image/png',buffer:png});await page.locator('#asset-upload [name=alt]').fill('Isolated staging concept image');await page.locator('[name=provenance]').fill('Automated staging fixture only; not approved production photography');const importedResponse=page.waitForResponse(r=>r.url()===base+'/api/admin/assets'&&r.request().method()==='POST');await page.getByRole('button',{name:'Import draft'}).click();const imported=await importedResponse;assert.equal(imported.status(),201);const assetId=(await imported.json()).id;
+let row=page.locator('.admin-row').filter({has:page.getByRole('heading',{name:assetId,exact:true})});await row.waitFor();
+await row.locator('[name=target]').selectOption('world-gifts');await row.locator('[name=status]').selectOption('approved');
+let updated=page.waitForResponse(r=>r.url()===base+'/api/admin/assets/'+assetId&&r.request().method()==='PATCH');await row.getByRole('button',{name:'Save asset'}).click();assert.equal((await updated).status(),200);await row.getByText(/ai-concept · approved/).waitFor();
+await row.locator('[name=status]').selectOption('published');updated=page.waitForResponse(r=>r.url()===base+'/api/admin/assets/'+assetId&&r.request().method()==='PATCH');await row.getByRole('button',{name:'Save asset'}).click();assert.equal((await updated).status(),200);await row.getByText(/ai-concept · published/).waitFor();await page.screenshot({path:'artifacts/admin-assets-authenticated-1440.png',fullPage:true});
+await page.goto(base+'/');const heroImage=page.locator('.panel img').first();assert.ok((await heroImage.getAttribute('alt')).includes('AI-generated concept'));assert.ok(await heroImage.getAttribute('srcset'));assert.ok(await heroImage.evaluate(img=>img.complete&&img.naturalWidth>0));const r=await page.request.get(base+'/media/world-gifts');assert.equal(r.headers()['content-type'],'image/webp');
+const cleanup=await page.request.patch(base+'/api/admin/assets/'+assetId,{headers:{Origin:base},data:{status:'draft'}});assert.equal(cleanup.status(),200);
+for(const width of [390,1440]){await page.setViewportSize({width,height:900});await page.goto(base+'/');await page.screenshot({path:'artifacts/home-'+width+'.png',fullPage:true});}
+assert.deepEqual(errors,[]);await browser.close();console.log('Passed: 48 responsive route checks, desktop hover/keyboard navigation, 48/26/26 distribution, reduced motion, contextual form persistence, authenticated inquiry review, browser WebP import/approval/publication and live local asset rendering; no browser errors.');

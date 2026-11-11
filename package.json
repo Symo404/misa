@@ -6,11 +6,24 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "check": "tsc --noEmit",
-    "test": "node --test tests/*.test.js"
+    "test": "tsx --test tests/worker.test.js tests/backend.test.ts",
+    "dev:staging": "wrangler dev --config wrangler.staging.jsonc --persist-to .wrangler/phase2-staging --port 8788",
+    "migrate:local": "wrangler d1 migrations apply misa-staging --local --config wrangler.staging.jsonc --persist-to .wrangler/phase2-staging",
+    "build:staging": "wrangler deploy --config wrangler.staging.jsonc --dry-run --outdir /tmp/misa-staging-build",
+    "test:backend": "tsx --test tests/backend.test.ts",
+    "test:browser": "node tests/phase2-browser.mjs",
+    "import:asset": "node scripts/import-asset.mjs",
+    "setup:local": "node scripts/setup-local.mjs"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261110.1",
+    "@playwright/test": "^1.56.1",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "wrangler": "^4.0.0",
-    "@playwright/test": "^1.56.1"
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "jose": "^6.2.17"
   }
 }

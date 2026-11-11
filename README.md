@@ -1,41 +1,44 @@
 # MISA
 
-Cloudflare Worker website for Objects, Taste and Experiences. Framework-free server rendering keeps the site portable and the client JavaScript small. The specification recommends Next.js; this implementation uses the Workers runtime directly for the requested deployment target.
+An editorial catalogue for Objects, Taste and Experiences, built on a Cloudflare Worker. Phase 2 adds encrypted D1 inquiries, private R2 media, staff dashboards, approved-image imports and a durable email notification outbox.
 
-## Develop and validate
+Start with [the Phase 2 report](docs/PHASE2.md) for architecture, schema, security boundaries, exact bindings/variables, validation evidence and the staging/promotion/rollback procedure.
 
-Node.js 24 and npm are used. From `/workspace/misa`:
+## Local staging
+
+Node.js 24, npm and Chromium are used. Work in the existing checkout; each cloud task is already isolated.
 
 ```sh
 npm ci --cache /workspace/.npm-cache
+npm run setup:local
+XDG_CONFIG_HOME=/workspace/.config npm run migrate:local
 npm run check
-npm test
-npx wrangler deploy --dry-run --outdir /tmp/misa-build
-npm run dev -- --ip 0.0.0.0
+XDG_CONFIG_HOME=/workspace/.config npm test
+XDG_CONFIG_HOME=/workspace/.config npm run build:staging
+XDG_CONFIG_HOME=/workspace/.config npm run dev:staging
 ```
 
-Use the existing checkout. Each cloud task is already isolated; do not create a worktree unless requested.
+In another shell: `npm run test:browser`. Override `CHROMIUM_PATH` when needed. The browser suite uses synthetic local data and produces screenshots in ignored `artifacts/`.
 
-## Deploy
+`setup:local` creates random ignored credentials only if `.dev.vars` does not already exist. Local staff login reads the generated `LOCAL_ADMIN_TOKEN`; never put it in Git or expose it remotely. The loopback-only login is unavailable on deployed hosts. Real staging/production staff require Cloudflare Access JWT verification plus explicit staff allowlists.
 
-Set `CLOUDFLARE_API_TOKEN` securely (Workers Scripts Edit for the intended account) and `CLOUDFLARE_ACCOUNT_ID` for gramsmorocco. Run `npx wrangler whoami` to verify the account, then `npm run deploy`. Configuration creates the Worker named `misa` with workers.dev enabled; no custom domain is configured. Never save tokens in Git. For constrained cloud environments set `XDG_CONFIG_HOME=/workspace/.config` when invoking Wrangler.
+## Manual approved image import
 
-## Routes and architecture
+Use `/admin/assets` to upload, annotate, assign, approve and then publish. Originals stay private; public placements serve optimized variants. AI concepts remain labeled and cannot be assigned to real collaboration evidence. The alternate CLI uses Sharp:
 
-- `/`: three expanding desktop panels, stacked on mobile, gentle scroll treatment, reduced-motion support.
-- `/gifts`, `/cheese-charcuterie`, `/events`: category filters and concept cards.
-- Each category has a stable detail route under its world.
-- `/contact`: contextual forms selected by `type` and `selected` query parameters.
-- `/privacy`, `/sitemap.xml`, `/robots.txt`.
-- `src/data.js`: structured category and concept records, ready for future CMS migration.
-- `src/art.js`: locally rendered, labeled SVG placeholders.
-- `src/style.js`: ivory, rose, olive and caramel tokens; responsive layouts.
-- `src/worker.js`: routing, semantic layout, escaped rendering, security headers and small client script.
+```sh
+npm run import:asset -- approved-image.png "Descriptive alt text" "Approval/source record" ai-concept
+```
 
-## Content and launch limitations
+Supply `MISA_STAFF_ORIGIN`, `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` securely in the process environment, with an Access service policy and explicit service subject allowlist. No paid image-generation API is activated.
 
-No approved visual previews or production images were included in the upload. All illustrations are original placeholder compositions labeled as such, not product photographs. All categories are demonstration concepts; availability, materials, lead times, food composition, allergens, servings and packaging require verification. No real projects, clients, testimonials, contact addresses or phone numbers are fabricated. The wordmark and favicon are interim typographic marks; approved custom logo vectors remain required. The font uses a system fallback; Manrope assets are not supplied.
+## Deployment boundary
 
-Inquiries are deliberately disabled: the endpoint returns 503 and never claims success. Entered fields are not transmitted. No uploads or customer record storage are enabled. Production email delivery, verified sender/recipient, server validation, spam protection, rate limiting, duplicate protection and retention policy remain a separate required integration before inquiry collection is enabled. The form is a preview, not a working delivery system. Confirm legal operator and privacy requirements before launch.
+- `wrangler.jsonc`: existing live Worker configuration, unchanged.
+- `wrangler.staging.jsonc`: isolated staging config; D1 UUID is a local placeholder. Replace it only after authenticated inventory and creation of a separate staging database.
+- `npm run build:staging` is a dry run, not a deployment.
+- Do not merge or deploy Phase 2 to the live `misa` Worker before remote staging verification and explicit production approval.
 
-No performance percentile claims or full WCAG certification are made. Add approved social preview raster assets before final social sharing rollout. Real email integration, approved imagery, contact details and visual reference comparison remain prerequisites for the full production acceptance criteria in the supplied brief.
+The checked-in staging settings keep public persistence and email disabled. Remote collection additionally needs a secure encryption key, rate-limit secret, real Turnstile configuration and reviewed privacy/data retention arrangements. Email can remain disabled while inquiries persist; delivery status is reported separately.
+
+Approved production images, verified contacts and final product/event details remain outstanding. Placeholder illustrations and catalogue concepts are clearly identified; no real clients, events, compositions or availability are invented.
